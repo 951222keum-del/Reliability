@@ -214,7 +214,7 @@ with st.sidebar:
     st.header("2. 분석 옵션")
     h_fail = st.number_input("Fail 기준 깊이 (H_FAIL)", value=289.0, format="%.1f")
     p_tail = st.slider("분석 분위수 (P_tail)", 0.90, 0.999, 0.99, 0.001, format="%.3f")
-    max_time = st.number_input("최대 예측 시간 (Max Time)", min_value=1000, max_value=20000, value=5000, step=500)
+    max_time = st.number_input("최대 예측 시간 (Max Time)", min_value=1000, max_value=200000, value=5000, step=500)
     beta_model_option = st.selectbox('Beta Smoothing 모델 선택', ('poly_log', 'proportional_mu'), index=0, help="`poly_log`가 일반적인 모델이며, `proportional_mu`는 Beta(t)=C*mu(t) 모델입니다.")
     st.markdown("---")
     st.subheader("Weibull 적합 옵션")
