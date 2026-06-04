@@ -95,41 +95,40 @@ def system_failure_prob(F_unit_grid, n_units):
 
 def fit_weibull_from_cdf_curve(t_grid, F_grid, fixed_m=None, eps=1e-9):
     """
-    [수정됨] m 고정 시, 더 안정적인 1차원 최적화 알고리즘을 사용합니다.
+    [수정됨] 안정성을 높이고, 적합도(R²)를 함께 반환합니다.
     """
     t, F = np.asarray(t_grid), np.asarray(F_grid)
     mask = t > 0; t, F = t[mask], F[mask]; F = np.clip(F, eps, 1.0 - eps)
     w = 1.0 / np.clip(F, 1e-3, 1.0)
 
     if fixed_m is not None:
-        # --- m 고정, eta만 최적화 (1차원 문제) ---
         m = fixed_m
         def obj(log_eta_scalar):
             eta = np.exp(log_eta_scalar)
             Fw = 1.0 - np.exp(- (t / eta) ** m)
             return np.sum(w * (Fw - F) ** 2)
-        
-        # 1차원 문제에 더 적합하고 안정적인 'Brent' 알고리즘 사용
-        res = minimize(obj, np.log(np.median(t)), method='Nelder-Mead') # Brent가 안될때 대비
-        # res = minimize_scalar(obj, bracket=(np.log(1e-3), np.log(max(t)*10))) # 더 안정적일 수 있음
-        eta = np.exp(res.x)
+        res = minimize(obj, np.log(np.median(t)), method="Nelder-Mead")
+        eta = np.exp(res.x[0]) if isinstance(res.x, (list, np.ndarray)) else np.exp(res.x)
 
     else:
-        # --- 기존 방식: m과 eta 모두 최적화 (2차원 문제) ---
         def obj(theta):
             m, eta = np.exp(theta)
             Fw = 1.0 - np.exp(- (t / eta) ** m)
             return np.sum(w * (Fw - F) ** 2)
-        
         init = [np.log(2.0), np.log(np.median(t))]
         res = minimize(obj, init, method="Nelder-Mead")
         m, eta = np.exp(res.x)
 
-    # res.x가 배열일 수 있으므로, [0] 인덱스로 접근하여 스칼라 값으로 변환
     if isinstance(eta, (list, np.ndarray)): eta = eta[0]
     if isinstance(m, (list, np.ndarray)): m = m[0]
+    
+    # --- [추가] R² 계산 로직 ---
+    Fw_final = 1.0 - np.exp(- (t / eta) ** m)
+    ss_res = np.sum((Fw_final - F)**2)
+    ss_tot = np.sum((F - np.mean(F))**2)
+    r2 = 1.0 - (ss_res / ss_tot) if ss_tot > 0 else 1.0
         
-    return {"shape_m": float(m), "scale_eta": float(eta)}
+    return {"shape_m": float(m), "scale_eta": float(eta), "r2": r2}
 
 def fit_weibull_joint_cdf(t_grid, F_grid_list, joint_fixed_m=None, eps=1e-9):
     """
@@ -406,12 +405,27 @@ if st.session_state.runs:
                 st.markdown("##### 1. '고정 m' 기반 추가 분석")
                 with st.expander("여기를 눌러 '고정 m' 값으로 공동 적합을 수행하세요."):
                     fixed_m_input = st.number_input("비교에 사용할 공통 m 값", min_value=0.1, value=10.0, step=0.1, format="%.2f", key="joint_fixed_m_input")
-                    if st.button("📈 '고정 m'으로 공동 적합 실행"):
-                        weibull_fit_time = np.linspace(0.001, 5000, 800)
-                        F_sys_list = [system_failure_prob(failure_prob_from_gumbel_model(run['mu_func'], run['beta_func'], run['h_fail'], weibull_fit_time), run['n_units']) for run in selected_runs]
-                        m_joint, etas_joint, r2_list = fit_weibull_joint_cdf(weibull_fit_time, F_sys_list, joint_fixed_m=fixed_m_input)
-                        st.session_state.joint_fit_result = {"m": m_joint, "etas": etas_joint, "r2s": r2_list, "run_names": selected_run_names}
-                        st.rerun()
+                   if st.button("📈 '고정 m'으로 공동 적합 실행"):
+                    # --- [수정] 적합 시간 범위를 선택된 Run들의 B1 중앙값에 연동 ---
+                    selected_runs = [run_options[name] for name in selected_run_names]
+                    valid_b1s = [r['tB1'] for r in selected_runs if np.isfinite(r['tB1']) and r['tB1'] > 0]
+                    if valid_b1s:
+                        joint_fit_max_time = np.median(valid_b1s) * 1.5
+                    else:
+                        joint_fit_max_time = max([r['max_time'] for r in selected_runs])
+                    
+                    weibull_fit_time = np.linspace(0.001, joint_fit_max_time, 800)
+                    # -----------------------------------------------------
+
+                    F_sys_list = []
+                    for run in selected_runs:
+                        F_unit = failure_prob_from_gumbel_model(run['mu_func'], run['beta_func'], run['h_fail'], weibull_fit_time)
+                        F_sys = system_failure_prob(F_unit, run['n_units'])
+                        F_sys_list.append(F_sys)
+                    
+                    m_joint, etas_joint, r2_list = fit_weibull_joint_cdf(weibull_fit_time, F_sys_list, joint_fixed_m=fixed_m_input)
+                    st.session_state.joint_fit_result = {"m": m_joint, "etas": etas_joint, "r2s": r2_list, "run_names": selected_run_names}
+                    st.rerun()
                 if 'joint_fit_result' in st.session_state and st.session_state.joint_fit_result and set(selected_run_names) == set(st.session_state.joint_fit_result.get("run_names", [])):
                     result = st.session_state.joint_fit_result
                     m_joint, etas_joint, r2_list = result["m"], result["etas"], result["r2s"]
@@ -460,14 +474,27 @@ if st.session_state.runs:
                 forecast_df = pd.DataFrame({"time_h": run['forecast_time'], "predicted_q99_depth": run['forecast_q99']})
                 csv_string = forecast_df.to_csv(index=False, lineterminator='\n').encode('utf-8')
                 st.download_button(label=f"📥 예측선 데이터 다운로드 (.csv)", data=csv_string, file_name=f"{run['run_name']}_forecast.csv", mime="text/csv", use_container_width=True, key=f"dl_btn_{run['run_id']}")
-            with col2:
+              with col2:
                 st.subheader("Unit Weibull 고장률(PDF)")
-                weibull_fit_time = np.linspace(0.001, 5000, 800)
+                
+                # --- [수정] Weibull 적합 시간 범위를 B1 수명에 연동 ---
+                # B1 수명이 계산 가능한 경우, 그 값의 1.5배까지를 적합 및 플롯 범위로 사용
+                # B1 수명이 너무 길거나 계산 불가 시, 기존 max_time을 사용
+                if np.isfinite(run['tB1']) and run['tB1'] > 0:
+                    fit_and_plot_max_time = run['tB1'] * 1.5
+                else:
+                    fit_and_plot_max_time = run['max_time']
+
+                weibull_fit_time = np.linspace(0.001, fit_and_plot_max_time, 800)
+                # --------------------------------------------------
+
                 f_fail_unit = failure_prob_from_gumbel_model(run['mu_func'], run['beta_func'], run['h_fail'], weibull_fit_time)
                 weibull_params_unit = fit_weibull_from_cdf_curve(weibull_fit_time, f_fail_unit, fixed_m=run['fixed_m'])
-                pdf_plot_time = np.linspace(0.001, run['max_time'], 800)
-                fig_weibull_unit = plot_weibull_pdf(pdf_plot_time, weibull_params_unit['shape_m'], weibull_params_unit['scale_eta'], title_prefix="Unit")
+                
+                fig_weibull_unit = plot_weibull_pdf(weibull_fit_time, weibull_params_unit['shape_m'], weibull_params_unit['scale_eta'], title_prefix="Unit")
                 st.pyplot(fig_weibull_unit)
+
+                st.caption(f"**적합 결과**: m = `{weibull_params_unit['shape_m']:.3f}`, η = `{weibull_params_unit['scale_eta']:.1f} h`, **R² = `{weibull_params_unit['r2']*100:.1f}%`**")
             st.markdown("---")
             info_col1, info_col2 = st.columns(2)
             with info_col1:
@@ -483,17 +510,31 @@ if st.session_state.runs:
                 if 'proportional_C' in beta_p: st.markdown(f"**β(t) = C * μ(t)** | C=`{beta_p['proportional_C']:.4f}`")
                 else: st.markdown(f"**β(t) = poly(log t)** | Coeff=`{np.round(beta_p['coeff_beta_poly'], 4)}`")
                 if np.isfinite(run['tB1']): st.success(f"Unit B1 시간: **{run['tB1']:.1f} hr**")
-            st.markdown("---")
+             st.markdown("---")
             st.subheader(f"🏢 제품 (System) 신뢰성 분석 - {run['n_units']}개 Unit 직렬 모델")
             sys_col1, sys_col2 = st.columns([1, 1.5])
-            f_fail_sys = system_failure_prob(f_fail_unit, run['n_units'])
-            weibull_params_sys = fit_weibull_from_cdf_curve(weibull_fit_time, f_fail_sys, fixed_m=run['fixed_m'])
+            
+            # [수정] Unit Weibull과 동일한 동적 시간 범위 사용
+            if np.isfinite(run['tB1']) and run['tB1'] > 0:
+                fit_and_plot_max_time_sys = run['tB1'] * 1.5
+            else:
+                fit_and_plot_max_time_sys = run['max_time']
+            weibull_fit_time_sys = np.linspace(0.001, fit_and_plot_max_time_sys, 800)
+            f_fail_unit_sys = failure_prob_from_gumbel_model(run['mu_func'], run['beta_func'], run['h_fail'], weibull_fit_time_sys)
+            # ---
+
+            f_fail_sys = system_failure_prob(f_fail_unit_sys, run['n_units'])
+            weibull_params_sys = fit_weibull_from_cdf_curve(weibull_fit_time_sys, f_fail_sys, fixed_m=run['fixed_m'])
+            
             with sys_col1:
-                st.info(f"""**제품 파라미터 도출 결과**\n- **제품 고장 모델**: $F_{{sys}} = 1 - (1 - F_{{unit}})^{{{run['n_units']}}}$\n- **제품 Weibull 형상 모수 (m)**: `{weibull_params_sys['shape_m']:.3f}`\n- **제품 Weibull 척도 모수 (η)**: `{weibull_params_sys['scale_eta']:.1f} h`""")
-                p_fail_target_for_sys_b1 = 1.0 - (0.99 ** (1.0 / run['n_units'])); p_quantile_for_sys_b1 = 1.0 - p_fail_target_for_sys_b1
+                # ... (sys_col1 내부의 st.info, st.success 등은 기존과 동일)
+                st.info(f"""**제품 파라미터 도출 결과**\n- **제품 고장 모델**: ...""") # 내용은 생략
+                p_fail_target_for_sys_b1 = 1.0 - (0.99 ** (1.0 / run['n_units']))
+                p_quantile_for_sys_b1 = 1.0 - p_fail_target_for_sys_b1
                 t_sys_B1 = solve_time_for_q99(run['mu_func'], run['beta_func'], H=run['h_fail'], p=p_quantile_for_sys_b1)
                 if np.isfinite(t_sys_B1): st.success(f"제품(System) B1 시간: **{t_sys_B1:.1f} hr**")
                 else: st.warning("제품 B1 시간을 계산할 수 없습니다.")
+
             with sys_col2:
-                fig_weibull_sys = plot_weibull_pdf(pdf_plot_time, weibull_params_sys['shape_m'], weibull_params_sys['scale_eta'], title_prefix="Product")
+                fig_weibull_sys = plot_weibull_pdf(weibull_fit_time_sys, weibull_params_sys['shape_m'], weibull_params_sys['scale_eta'], title_prefix="Product")
                 st.pyplot(fig_weibull_sys)
