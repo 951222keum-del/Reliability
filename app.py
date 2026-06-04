@@ -377,9 +377,8 @@ with tabs[0]:
 
 # --- 기존 '종합 비교' 및 '개별 Run' 탭 ---
 if st.session_state.runs:
-    # '종합 비교' 탭 (tabs[1]이 됨)
+     # '종합 비교' 탭 (tabs[1]이 됨)
     with tabs[1]:
-        # (기존 '종합 비교' 탭의 모든 코드... 변경 없음, 생략)
         st.subheader("모든 Run의 성장 예측선 종합 비교")
         fig_sum, ax_sum = plt.subplots(figsize=(10, 6))
         if st.session_state.runs:
@@ -393,11 +392,13 @@ if st.session_state.runs:
         ax_sum.set_title("Forecast Toplines Comparison", fontsize=14)
         ax_sum.grid(True, alpha=0.4); ax_sum.legend(); ax_sum.set_ylim(bottom=0)
         st.pyplot(fig_sum)
+
         if len(st.session_state.runs) >= 2:
             st.markdown("---")
             st.subheader("🤝 2-Run 공동 적합 및 가속 계수 분석")
             run_options = {run['run_name']: run for run in st.session_state.runs}
             selected_run_names = st.multiselect("비교할 두 개의 Run을 선택하세요.", options=list(run_options.keys()), help="정확히 두 개의 Run을 선택해야 분석이 활성화됩니다.")
+
             if len(selected_run_names) != 2:
                 st.info("위 목록에서 비교하고 싶은 Run 2개를 선택하면 분석이 시작됩니다.")
             else:
@@ -405,27 +406,18 @@ if st.session_state.runs:
                 st.markdown("##### 1. '고정 m' 기반 추가 분석")
                 with st.expander("여기를 눌러 '고정 m' 값으로 공동 적합을 수행하세요."):
                     fixed_m_input = st.number_input("비교에 사용할 공통 m 값", min_value=0.1, value=10.0, step=0.1, format="%.2f", key="joint_fixed_m_input")
-                   if st.button("📈 '고정 m'으로 공동 적합 실행"):
-                    # --- [수정] 적합 시간 범위를 선택된 Run들의 B1 중앙값에 연동 ---
-                    selected_runs = [run_options[name] for name in selected_run_names]
-                    valid_b1s = [r['tB1'] for r in selected_runs if np.isfinite(r['tB1']) and r['tB1'] > 0]
-                    if valid_b1s:
-                        joint_fit_max_time = np.median(valid_b1s) * 1.5
-                    else:
-                        joint_fit_max_time = max([r['max_time'] for r in selected_runs])
-                    
-                    weibull_fit_time = np.linspace(0.001, joint_fit_max_time, 800)
-                    # -----------------------------------------------------
+                    # --- [수정] 아래 if 문의 들여쓰기를 맞춥니다 ---
+                    if st.button("📈 '고정 m'으로 공동 적합 실행"):
+                        valid_b1s = [r['tB1'] for r in selected_runs if np.isfinite(r['tB1']) and r['tB1'] > 0]
+                        joint_fit_max_time = np.median(valid_b1s) * 1.5 if valid_b1s else max([r['max_time'] for r in selected_runs])
+                        weibull_fit_time = np.linspace(0.001, joint_fit_max_time, 800)
+                        
+                        F_sys_list = [system_failure_prob(failure_prob_from_gumbel_model(run['mu_func'], run['beta_func'], run['h_fail'], weibull_fit_time), run['n_units']) for run in selected_runs]
+                        
+                        m_joint, etas_joint, r2_list = fit_weibull_joint_cdf(weibull_fit_time, F_sys_list, joint_fixed_m=fixed_m_input)
+                        st.session_state.joint_fit_result = {"m": m_joint, "etas": etas_joint, "r2s": r2_list, "run_names": selected_run_names}
+                        st.rerun()
 
-                    F_sys_list = []
-                    for run in selected_runs:
-                        F_unit = failure_prob_from_gumbel_model(run['mu_func'], run['beta_func'], run['h_fail'], weibull_fit_time)
-                        F_sys = system_failure_prob(F_unit, run['n_units'])
-                        F_sys_list.append(F_sys)
-                    
-                    m_joint, etas_joint, r2_list = fit_weibull_joint_cdf(weibull_fit_time, F_sys_list, joint_fixed_m=fixed_m_input)
-                    st.session_state.joint_fit_result = {"m": m_joint, "etas": etas_joint, "r2s": r2_list, "run_names": selected_run_names}
-                    st.rerun()
                 if 'joint_fit_result' in st.session_state and st.session_state.joint_fit_result and set(selected_run_names) == set(st.session_state.joint_fit_result.get("run_names", [])):
                     result = st.session_state.joint_fit_result
                     m_joint, etas_joint, r2_list = result["m"], result["etas"], result["r2s"]
@@ -440,9 +432,12 @@ if st.session_state.runs:
                         fig_joint, ax_joint = plt.subplots(figsize=(8, 5))
                         pdf_plot_time = np.linspace(0.001, joint_plot_max_x, 800)
                         for i, name in enumerate(selected_run_names):
-                            eta_i = etas_joint[i]; pdf = (m_joint / eta_i) * (pdf_plot_time / eta_i)**(m_joint - 1) * np.exp(-(pdf_plot_time / eta_i)**m_joint)
+                            eta_i = etas_joint[i]
+                            pdf = (m_joint / eta_i) * (pdf_plot_time / eta_i)**(m_joint - 1) * np.exp(-(pdf_plot_time / eta_i)**m_joint)
                             ax_joint.plot(pdf_plot_time, pdf, lw=2, label=f"{name} (η={eta_i:.1f}h)")
-                        ax_joint.set_title(f"Joint Weibull PDF (Common m={m_joint:.3f})", fontsize=12); ax_joint.legend(); ax_joint.grid(True, alpha=0.3); st.pyplot(fig_joint)
+                        ax_joint.set_title(f"Joint Weibull PDF (Common m={m_joint:.3f})", fontsize=12); ax_joint.legend(); ax_joint.grid(True, alpha=0.3)
+                        st.pyplot(fig_joint)
+
                     st.markdown("##### 3. 가속 계수 (AF)")
                     baseline_run_name = st.selectbox("기준(Baseline) Run 선택", options=selected_run_names, key="af_baseline_select_joint")
                     if baseline_run_name:
