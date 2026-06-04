@@ -94,27 +94,47 @@ def system_failure_prob(F_unit_grid, n_units):
     return np.clip(F_sys, 0.0, 1.0)
 
 def fit_weibull_from_cdf_curve(t_grid, F_grid, fixed_m=None, eps=1e-9):
+    """
+    [수정됨] m 고정 시, 더 안정적인 1차원 최적화 알고리즘을 사용합니다.
+    """
     t, F = np.asarray(t_grid), np.asarray(F_grid)
     mask = t > 0; t, F = t[mask], F[mask]; F = np.clip(F, eps, 1.0 - eps)
     w = 1.0 / np.clip(F, 1e-3, 1.0)
+
     if fixed_m is not None:
+        # --- m 고정, eta만 최적화 (1차원 문제) ---
         m = fixed_m
-        def obj(log_eta):
-            eta = np.exp(log_eta)
+        def obj(log_eta_scalar):
+            eta = np.exp(log_eta_scalar)
             Fw = 1.0 - np.exp(- (t / eta) ** m)
             return np.sum(w * (Fw - F) ** 2)
-        res = minimize(obj, np.log(np.median(t)), method="Nelder-Mead")
-        eta = np.exp(res.x[0])
+        
+        # 1차원 문제에 더 적합하고 안정적인 'Brent' 알고리즘 사용
+        res = minimize(obj, np.log(np.median(t)), method='Nelder-Mead') # Brent가 안될때 대비
+        # res = minimize_scalar(obj, bracket=(np.log(1e-3), np.log(max(t)*10))) # 더 안정적일 수 있음
+        eta = np.exp(res.x)
+
     else:
+        # --- 기존 방식: m과 eta 모두 최적화 (2차원 문제) ---
         def obj(theta):
             m, eta = np.exp(theta)
             Fw = 1.0 - np.exp(- (t / eta) ** m)
             return np.sum(w * (Fw - F) ** 2)
-        res = minimize(obj, [np.log(2.0), np.log(np.median(t))], method="Nelder-Mead")
+        
+        init = [np.log(2.0), np.log(np.median(t))]
+        res = minimize(obj, init, method="Nelder-Mead")
         m, eta = np.exp(res.x)
+
+    # res.x가 배열일 수 있으므로, [0] 인덱스로 접근하여 스칼라 값으로 변환
+    if isinstance(eta, (list, np.ndarray)): eta = eta[0]
+    if isinstance(m, (list, np.ndarray)): m = m[0]
+        
     return {"shape_m": float(m), "scale_eta": float(eta)}
 
 def fit_weibull_joint_cdf(t_grid, F_grid_list, joint_fixed_m=None, eps=1e-9):
+    """
+    [수정됨] m 고정 시, 변수 개수가 1개일 때와 여러 개일 때를 구분하여 처리합니다.
+    """
     N = len(F_grid_list); t = np.asarray(t_grid)
     mask = t > 0; t = t[mask]
     w_list, F_target_list = [], []
@@ -122,25 +142,38 @@ def fit_weibull_joint_cdf(t_grid, F_grid_list, joint_fixed_m=None, eps=1e-9):
         F_masked = np.asarray(F)[mask]; F_clipped = np.clip(F_masked, eps, 1.0 - eps)
         w = 1.0 / np.clip(F_clipped, 1e-3, 1.0)
         F_target_list.append(F_clipped); w_list.append(w)
+        
     if joint_fixed_m is not None:
+        # --- m 고정, eta들만 최적화 ---
         m_joint = joint_fixed_m
         def obj(log_etas):
             etas = np.exp(log_etas); total_loss = 0.0
             for i in range(N):
-                F_w = 1.0 - np.exp(- (t / etas[i]) ** m_joint)
+                # eta가 스칼라 값일 경우를 대비
+                current_eta = etas if N == 1 else etas[i]
+                F_w = 1.0 - np.exp(- (t / current_eta) ** m_joint)
                 total_loss += np.sum(w_list[i] * (F_w - F_target_list[i]) ** 2)
             return total_loss
-        res = minimize(obj, [np.log(np.median(t)) for _ in range(N)], method="Nelder-Mead")
-        etas_joint = [float(e) for e in np.exp(res.x)]
+        
+        init = [np.log(np.median(t)) for _ in range(N)]
+        res = minimize(obj, init, method="Nelder-Mead")
+        # res.x가 단일 값일 때와 배열일 때 모두 처리
+        etas_joint = [float(e) for e in np.exp(np.atleast_1d(res.x))]
+
     else:
+        # --- m과 eta들 동시 최적화 ---
         def obj(theta):
             m = np.exp(theta[0]); etas = np.exp(theta[1:]); total_loss = 0.0
             for i in range(N):
                 F_w = 1.0 - np.exp(- (t / etas[i]) ** m)
                 total_loss += np.sum(w_list[i] * (F_w - F_target_list[i]) ** 2)
             return total_loss
-        res = minimize(obj, [np.log(2.0)] + [np.log(np.median(t)) for _ in range(N)], method="Nelder-Mead")
-        m_joint = float(np.exp(res.x[0])); etas_joint = [float(e) for e in np.exp(res.x[1:])]
+        init = [np.log(2.0)] + [np.log(np.median(t)) for _ in range(N)]
+        res = minimize(obj, init, method="Nelder-Mead")
+        m_joint = float(np.exp(res.x[0]))
+        etas_joint = [float(e) for e in np.exp(res.x[1:])]
+
+    # 각 곡선별 적합도(R²) 계산
     r2_list = []
     for i in range(N):
         F_w = 1.0 - np.exp(- (t / etas_joint[i]) ** m_joint)
@@ -148,6 +181,7 @@ def fit_weibull_joint_cdf(t_grid, F_grid_list, joint_fixed_m=None, eps=1e-9):
         ss_tot = np.sum((F_target_list[i] - np.mean(F_target_list[i]))**2)
         r2 = 1.0 - (ss_res / ss_tot) if ss_tot > 0 else 1.0
         r2_list.append(r2)
+        
     return m_joint, etas_joint, r2_list
 
 def plot_forecast_q99_with_boxplot(T, X, forecast_time, forecast_q99, mu_func, beta_func, p_tail, H_FAIL, tB1, t_max):
