@@ -505,7 +505,7 @@ if st.session_state.runs:
                 if 'proportional_C' in beta_p: st.markdown(f"**β(t) = C * μ(t)** | C=`{beta_p['proportional_C']:.4f}`")
                 else: st.markdown(f"**β(t) = poly(log t)** | Coeff=`{np.round(beta_p['coeff_beta_poly'], 4)}`")
                 if np.isfinite(run['tB1']): st.success(f"Unit B1 시간: **{run['tB1']:.1f} hr**")
-             st.markdown("---")
+            st.markdown("---")
             st.subheader(f"🏢 제품 (System) 신뢰성 분석 - {run['n_units']}개 Unit 직렬 모델")
             sys_col1, sys_col2 = st.columns([1, 1.5])
             
