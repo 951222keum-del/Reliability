@@ -469,7 +469,7 @@ if st.session_state.runs:
                 forecast_df = pd.DataFrame({"time_h": run['forecast_time'], "predicted_q99_depth": run['forecast_q99']})
                 csv_string = forecast_df.to_csv(index=False, lineterminator='\n').encode('utf-8')
                 st.download_button(label=f"📥 예측선 데이터 다운로드 (.csv)", data=csv_string, file_name=f"{run['run_name']}_forecast.csv", mime="text/csv", use_container_width=True, key=f"dl_btn_{run['run_id']}")
-              with col2:
+            with col2:
                 st.subheader("Unit Weibull 고장률(PDF)")
                 
                 # --- [수정] Weibull 적합 시간 범위를 B1 수명에 연동 ---
