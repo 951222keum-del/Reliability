@@ -248,7 +248,7 @@ with st.sidebar:
     h_fail = st.number_input("Fail 기준 깊이 (H_FAIL)", value=289.0, format="%.1f")
     p_tail = st.slider("분석 분위수 (P_tail)", 0.90, 0.999, 0.99, 0.001, format="%.3f")
     max_time = st.number_input("최대 예측 시간 (Max Time)", min_value=1000, max_value=200000, value=5000, step=500)
-    beta_model_option = st.selectbox('Beta Smoothing 모델 선택', ('poly_log', 'proportional_mu'), index=0, help="`poly_log`가 일반적인 모델이며, `proportional_mu`는 Beta(t)=C*mu(t) 모델입니다.")
+    beta_model_option = st.selectbox('Beta Smoothing 모델 선택', ('poly_log', 'proportional_mu'), index=1, help="`poly_log`가 일반적인 모델이며, `proportional_mu`는 Beta(t)=C*mu(t) 모델입니다.")
     st.markdown("---")
     st.subheader("Weibull 적합 옵션")
     fix_m_checkbox = st.checkbox("Weibull 'm' 값 고정")
@@ -313,11 +313,11 @@ with tabs[0]:
     plan_col1, plan_col2 = st.columns(2)
     with plan_col1:
         st.subheader("입력 변수")
-        conf_level = st.slider("신뢰 수준 (Confidence Level)", 0.50, 0.99, 0.90, 0.01, "%.2f")
-        shape_m = st.number_input("Weibull 형상 모수 (m)", 0.1, 20.0, 2.0, 0.1, "%.2f")
+        conf_level = st.slider("신뢰 수준 (Confidence Level)", 0.50, 0.99, 0.80, 0.01, "%.2f")
+        shape_m = st.number_input("Weibull 형상 모수 (m)", 0.1, 20.0, 2.80, 0.1, "%.2f")
         reliability = st.slider("신뢰도 (Reliability, R)", 0.80, 0.999, 0.99, 0.001, "%.3f")
         b_life_yr = st.number_input("목표 B-Life (년)", 1, 50, 10, 1)
-        af = st.number_input("가속 계수 (AF)", min_value=1.0, value=1.0, step=0.1, format="%.1f")
+        af = st.number_input("가속 계수 (AF)", min_value=1.0, value=247.3, step=0.1, format="%.1f")
         samples_n = st.number_input("시료 수 (n)", 1, 100, 5, 1)
         
         # 시험 시간 계산
@@ -336,11 +336,11 @@ with tabs[0]:
         plot_s_col1, plot_s_col2 = st.columns(2)
         min_n = plot_s_col1.number_input("Min 시료 수 (X축)", 1, 50, 1)
         # [수정] Max 시료 수의 하한을 Min 값에 연동
-        max_n = plot_s_col2.number_input("Max 시료 수 (X축)", min_value=min_n + 1, value=100)
+        max_n = plot_s_col2.number_input("Max 시료 수 (X축)", min_value=min_n + 1, value=40)
 
         plot_t_col1, plot_t_col2 = st.columns(2)
         min_t = plot_t_col1.number_input("Min 시험 시간 (Y축)", min_value=1, value=1)
-        max_t = plot_t_col2.number_input("Max 시험 시간 (Y축)", min_value=min_t + 1, value=20000)
+        max_t = plot_t_col2.number_input("Max 시험 시간 (Y축)", min_value=min_t + 1, value=2500)
 
         sample_range = np.arange(min_n, max_n + 1)
         time_range = [calculate_test_time(conf_level, reliability, b_life_yr, shape_m, af, n) for n in sample_range]
