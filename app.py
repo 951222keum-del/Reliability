@@ -257,7 +257,7 @@ with st.sidebar:
         fixed_m_value = st.number_input("고정할 m 값 (Fixed m value)", min_value=0.1, value=2.0, step=0.1, format="%.2f")
     st.markdown("---")
     st.subheader("제품 (System) 신뢰성 분석")
-    n_units = st.number_input("FFZ 개수 (Unit n)", min_value=1, value=100, step=10, help="열교환기에 포함된 전체 유닛의 수입니다.")
+    n_units = st.number_input("FFZ 개수 (Unit n)", min_value=1, value=108, step=10, help="열교환기에 포함된 전체 유닛의 수입니다.")
     col_run, col_reset = st.columns(2)
     run_button = col_run.button("➕ 새로운 Run 추가", use_container_width=True)
     reset_button = col_reset.button("🗑️ 모든 기록 삭제", use_container_width=True)
