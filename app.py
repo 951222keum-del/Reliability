@@ -276,8 +276,8 @@ with st.sidebar:
     }
 
     def update_dataset_input():
-    selected_name = st.session_state.selected_dataset_name
-    st.session_state.data_txt_input = BUILTIN_DATASETS[selected_name]
+        selected_name = st.session_state.selected_dataset_name
+        st.session_state.data_txt_input = BUILTIN_DATASETS[selected_name]
 
     if "data_txt_input" not in st.session_state:
         st.session_state.data_txt_input = BUILTIN_DATASETS["SWAAT 공식 데이터"]
