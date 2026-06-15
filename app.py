@@ -314,7 +314,7 @@ with tabs[0]:
     with plan_col1:
         st.subheader("입력 변수")
         conf_level = st.slider("신뢰 수준 (Confidence Level)", 0.50, 0.99, 0.80, 0.01, "%.2f")
-        shape_m = st.number_input("Weibull 형상 모수 (m)", 0.1, 20.0, 2.80, 0.1, "%.2f")
+        shape_m = st.number_input("Weibull 형상 모수 (m)", 0.1, 20.0, 2.797, 0.1, "%.3f")
         reliability = st.slider("신뢰도 (Reliability, R)", 0.80, 0.999, 0.99, 0.001, "%.3f")
         b_life_yr = st.number_input("목표 B-Life (년)", 1, 50, 10, 1)
         af = st.number_input("가속 계수 (AF)", min_value=1.0, value=247.3, step=0.1, format="%.1f")
