@@ -236,7 +236,6 @@ if 'runs' not in st.session_state:
     st.session_state.runs = []
 
 # --- 사이드바 ---
-# (기존 사이드바 코드는 변경 없음, 생략)
 with st.sidebar:
     st.header("Run 이름 지정 (선택 사항)")
     run_name_input = st.text_input("이번 분석의 이름을 입력하세요.", placeholder="예: 초기 샘플 분석")
@@ -275,18 +274,21 @@ with st.sidebar:
 1.180626539	11.21	21.246	74.612
 1.022712087	11.119	21.247	35.192""",
     }
-    
+
+    def update_dataset_input():
+    selected_name = st.session_state.selected_dataset_name
+    st.session_state.data_txt_input = BUILTIN_DATASETS[selected_name]
+
     if "data_txt_input" not in st.session_state:
         st.session_state.data_txt_input = BUILTIN_DATASETS["SWAAT 공식 데이터"]
     
     selected_dataset_name = st.selectbox(
         "기본 내장 Dataset 선택",
         options=list(BUILTIN_DATASETS.keys()),
-        index=0
+        index=0,
+        key="selected_dataset_name",
+        on_change=update_dataset_input
     )
-    
-    if st.button("선택한 Dataset 불러오기", use_container_width=True):
-        st.session_state.data_txt_input = BUILTIN_DATASETS[selected_dataset_name]
     
     data_txt = st.text_area(
         "새로운 데이터를 붙여넣으세요.",
