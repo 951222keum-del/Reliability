@@ -367,7 +367,7 @@ with tabs[0]:
         reliability = st.slider("신뢰도 (Reliability, R)", 0.80, 0.999, 0.99, 0.001, "%.3f")
         b_life_yr = st.number_input("목표 B-Life (년)", 1, 50, 10, 1)
         af = st.number_input("가속 계수 (AF)", min_value=1.0, value=247.3, step=0.1, format="%.1f")
-        samples_n = st.number_input("시료 수 (n)", 1, 100, 5, 1)
+        samples_n = st.number_input("시료 수 (n)", 1, 100, 9, 1)
         
         # 시험 시간 계산
         test_time = calculate_test_time(conf_level, reliability, b_life_yr, shape_m, af, samples_n)
