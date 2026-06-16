@@ -10,7 +10,7 @@ import math
 # ============================================================
 # 1. Gumbel 분석 및 플로팅 함수 모음
 # ============================================================
-# (이전과 동일한 모든 분석 함수들... 내용은 생략하고 함수 이름만 표기)
+
 def load_dataset_from_text(text: str):
     buf = StringIO(text.strip())
     T = np.array(list(map(float, buf.readline().split())))
@@ -358,7 +358,7 @@ tabs = st.tabs(tab_list)
 
 # --- [신규] '무고장 시험 설계' 탭 ---
 with tabs[0]:
-    st.header("📝 무고장 시험 설계 (Success Run Test Planning)")
+    st.header("📝 무고장 시험 설계 ")
     st.info("목표 수명과 신뢰도를 만족함을 입증하기 위해 필요한 최소 시험 시간을 계산합니다.")
 
     plan_col1, plan_col2 = st.columns(2)
